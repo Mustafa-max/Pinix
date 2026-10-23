@@ -8,7 +8,6 @@
   <img src="https://img.shields.io/badge/Architecture-x86__64%20ELF-blue?style=flat-square" alt="Architecture">
   <img src="https://img.shields.io/badge/Development%20Time-2%20Weeks-orange?style=flat-square" alt="Dev Time">
   <img src="https://img.shields.io/badge/Status-Hobby%2FFor%20Fun-success?style=flat-square" alt="Status">
-  <img src="https://img.shields.io/badge/BOOT-none%20%2F-critical?style=flat-square" alt="Boot">
 </p>
 
 ---
@@ -22,15 +21,8 @@ Kod tabanında hiçbir hazır veya telifli Linux kodu kullanılmamıştır; bunu
 ## ✨ Öne Çıkan Özellikler
 
 * **Mimarî:** 64-bit ELF formatında derleme altyapısı.
-* **Donanım Uyumluluğu:** Popüler mimariler ve üreticiler (Intel, AMD, HP, Dell sistemler) göz önünde bulundurularak tasarlanmış donanım katmanı hedefleri.
-* **Önyükleme (Boot):** Hem geleneksel **BIOS** hem de modern **UEFI** sistemleri destekleme altyapısı.
-* **Hızlı Geliştirme:** Sadece 2 haftalık yoğun bir çalışma ve iterasyon süreciyle şekillendirilmiştir.
-
-## 🛠️ Teknolojiler ve Araçlar
-
-* **Assembly & C** (Düşük seviyeli çekirdek mantığı)
-* **GNU Make & GCC / NASM** (Derleme ve imaj oluşturma araçları)
-* **QEMU** (Emülasyon ve test ortamı)
+* **Donanım Hedefleri:** Intel, AMD, HP ve Dell gibi popüler sistem mimarileri göz önünde bulundurularak tasarlandı.
+* **Hızlı Geliştirme:** Sadece 2 haftalık yoğun bir çalışma ve iterasyon süreciyle şekillendirildi.
 
 ## 📌 Uyarı ve Amaç
 
