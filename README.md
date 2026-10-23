@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/Architecture-x86__64%20ELF-blue?style=flat-square" alt="Architecture">
   <img src="https://img.shields.io/badge/Development%20Time-2%20Weeks-orange?style=flat-square" alt="Dev Time">
   <img src="https://img.shields.io/badge/Status-Hobby%2FFor%20Fun-success?style=flat-square" alt="Status">
-  <img src="https://img.shields.io/badge/Boot-BIOS%20%2F%20UEFI-critical?style=flat-square" alt="Boot">
+  <img src="https://img.shields.io/badge/BOOT-none%20%2F-critical?style=flat-square" alt="Boot">
 </p>
 
 ---
