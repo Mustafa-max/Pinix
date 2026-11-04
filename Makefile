@@ -5,8 +5,12 @@ READELF ?= readelf
 
 BUILD_DIR := build
 KERNEL := $(BUILD_DIR)/pinix.elf
-BOOT_OBJ := $(BUILD_DIR)/boot.o
-KERNEL_OBJ := $(BUILD_DIR)/kernel_main.o
+OBJECTS := \
+	$(BUILD_DIR)/boot.o \
+	$(BUILD_DIR)/kernel_main.o \
+	$(BUILD_DIR)/serial.o \
+	$(BUILD_DIR)/framebuffer.o \
+	$(BUILD_DIR)/ps2.o
 
 CFLAGS := -m64 -std=c11 -O2 -Wall -Wextra -Werror \
           -ffreestanding -fno-builtin -fno-stack-protector \
@@ -22,14 +26,23 @@ all: $(KERNEL)
 $(BUILD_DIR):
 	mkdir -p $@
 
-$(BOOT_OBJ): kernel/boot.asm | $(BUILD_DIR)
+$(BUILD_DIR)/boot.o: kernel/boot.asm | $(BUILD_DIR)
 	$(NASM) -f elf64 -Wall -Werror -o $@ $<
 
-$(KERNEL_OBJ): kernel/main.c include/boot_info.h include/stdint.h | $(BUILD_DIR)
+$(BUILD_DIR)/kernel_main.o: kernel/main.c include/boot_info.h include/stdint.h drivers/video/framebuffer.h drivers/serial/serial.h drivers/input/ps2.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(KERNEL): $(BOOT_OBJ) $(KERNEL_OBJ) kernel/linker.ld
-	$(LD) $(LDFLAGS) -o $@ $(BOOT_OBJ) $(KERNEL_OBJ)
+$(BUILD_DIR)/serial.o: drivers/serial/serial.c include/stdint.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/framebuffer.o: drivers/video/framebuffer.c drivers/video/framebuffer.h include/boot_info.h include/stdint.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/ps2.o: drivers/input/ps2.c drivers/input/ps2.h include/stdint.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(KERNEL): $(OBJECTS) kernel/linker.ld
+	$(LD) $(LDFLAGS) -o $@ $(OBJECTS)
 
 check: $(KERNEL)
 	$(READELF) -h $(KERNEL) | grep -q 'Class:.*ELF64'

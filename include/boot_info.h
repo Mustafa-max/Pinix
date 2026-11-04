@@ -10,13 +10,16 @@
 #define PINIX_BOOT_FIRMWARE_BIOS    1u
 #define PINIX_BOOT_FIRMWARE_UEFI    2u
 
-/* Values describe usable/reserved regions; the bootloader owns the map. */
 #define PINIX_MEMORY_RESERVED 0u
 #define PINIX_MEMORY_USABLE   1u
 #define PINIX_MEMORY_ACPI     2u
 #define PINIX_MEMORY_MMIO     3u
 #define PINIX_MEMORY_BAD      4u
 
+/* 32-bit pixel storage: bytes B, G, R, X in increasing address order. */
+#define PINIX_FB_FORMAT_BGRX 1u
+
+/* Framebuffer address is a kernel-accessible virtual address, not just a PA. */
 typedef struct {
     uint64_t base;
     uint64_t length;
