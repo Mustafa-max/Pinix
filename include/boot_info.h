@@ -3,7 +3,7 @@
 
 #include "stdint.h"
 
-#define PINIX_BOOT_INFO_MAGIC   0x50494E4958424931ULL /* "PINIXBI1" */
+#define PINIX_BOOT_INFO_MAGIC   0x50494E4958424931ULL
 #define PINIX_BOOT_INFO_VERSION 1u
 
 #define PINIX_BOOT_FIRMWARE_UNKNOWN 0u
@@ -16,10 +16,9 @@
 #define PINIX_MEMORY_MMIO     3u
 #define PINIX_MEMORY_BAD      4u
 
-/* 32-bit pixel storage: bytes B, G, R, X in increasing address order. */
+/* 32-bit pixels: bytes B, G, R, X in increasing memory-address order. */
 #define PINIX_FB_FORMAT_BGRX 1u
 
-/* Framebuffer address is a kernel-accessible virtual address, not just a PA. */
 typedef struct {
     uint64_t base;
     uint64_t length;
@@ -39,6 +38,7 @@ typedef struct {
     uint64_t memory_map_entries;
     uint64_t memory_map_entry_size;
 
+    /* Kernel-accessible virtual address, not an unmapped physical address. */
     uint64_t framebuffer_address;
     uint64_t framebuffer_size;
     uint32_t framebuffer_width;

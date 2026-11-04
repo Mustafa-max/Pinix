@@ -2,6 +2,7 @@ CC ?= gcc
 LD ?= ld
 NASM ?= nasm
 READELF ?= readelf
+GRUB_FILE ?= grub-file
 
 BUILD_DIR := build
 KERNEL := $(BUILD_DIR)/pinix.elf
@@ -21,7 +22,7 @@ CFLAGS := -m64 -std=c11 -O2 -Wall -Wextra -Werror \
 LDFLAGS := -m elf_x86_64 -nostdlib -T kernel/linker.ld \
            -z max-page-size=0x1000
 
-.PHONY: all clean check
+.PHONY: all clean check check-multiboot2
 all: $(KERNEL)
 
 $(BUILD_DIR):
@@ -52,6 +53,14 @@ check: $(KERNEL)
 	$(READELF) -h $(KERNEL) | grep -q 'Class:.*ELF64'
 	$(READELF) -h $(KERNEL) | grep -q 'Machine:.*Advanced Micro Devices X86-64'
 	$(READELF) -h $(KERNEL) | grep -q 'Entry point address:'
+	@if command -v $(GRUB_FILE) >/dev/null 2>&1; then \
+		$(GRUB_FILE) --is-x86-multiboot2 $(KERNEL); \
+	else \
+		echo 'grub-file unavailable; skipped Multiboot2 header validation'; \
+	fi
+
+check-multiboot2: $(KERNEL)
+	$(GRUB_FILE) --is-x86-multiboot2 $(KERNEL)
 
 clean:
 	rm -rf $(BUILD_DIR)

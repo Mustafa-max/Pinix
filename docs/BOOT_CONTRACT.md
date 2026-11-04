@@ -1,48 +1,39 @@
-# Pinix bootloader integration contract
+# Pinix boot and display status
 
-Pinix is an x86-64 ELF kernel, not a BIOS boot sector or a UEFI `.efi` application.
-This repository intentionally contains no BIOS/UEFI bootloader. An external loader
-must implement this contract before jumping to the kernel.
+Pinix is an x86-64 ELF kernel with a Multiboot2 header. It is not a BIOS boot
+sector or a UEFI `.efi` application and does not include GRUB or another loader.
+GRUB configured with its Multiboot2 command can load the same kernel from BIOS or
+UEFI; UEFI firmware itself does not directly execute this ELF kernel.
 
-## Kernel image and entry
+## Build and check
 
-- Build with `make`; output: `build/pinix.elf` (ELF64, x86-64, linked at 1 MiB).
-- Load the ELF `PT_LOAD` segments at their linked addresses and zero the `p_memsz -
-  p_filesz` tails.
-- Enter `start` in 64-bit long mode, with the image/stack mapped, interrupts disabled,
-  and the x86-64 System V ABI. `start` sets a private 16 KiB stack.
-- Pass a pointer to `pinix_boot_info_t` in `RDI`. Keep the structure, memory map, and
-  referenced framebuffer accessible at the addresses supplied until the kernel exits.
-- `framebuffer_address` must be a kernel-accessible virtual address, not an unmapped
-  physical address. Current drawing supports 32-bit BGRX only.
+Run `make`; output is `build/pinix.elf`. `make check` validates ELF64/x86-64 metadata
+and uses `grub-file --is-x86-multiboot2` when that utility is installed. `make
+check-multiboot2` requires `grub-file`.
 
-## Discovery and drivers
+The Multiboot2 header requests the memory-map and framebuffer information tags and
+optionally requests 1920x1080x32. GRUB may return another mode if the firmware or
+adapter cannot provide that resolution. The 32-bit entry trampoline validates the
+Multiboot2 magic, creates temporary identity mappings for the first 4 GiB, switches
+to long mode, establishes a stack, and passes the Multiboot2 information pointer to
+`kernel_main`.
 
-`drivers/check/pci.c` scans PCI configuration mechanism #1 and records vendor/device
-IDs, class codes, and firmware-assigned BAR addresses. BARs are inventory data only:
-the kernel does not dereference or map them. This initial scan is not a complete
-hardware inventory and is not PCI driver binding. ACPI/SMBIOS, PCIe extended config,
-USB/xHCI, interrupt routing, DMA, storage, and GPU-specific drivers remain to be done.
+## Current functionality and limits
 
-The repository also has bounded-polled COM1 output, validated drawing to a bootloader-
-provided 32-bit BGRX framebuffer, and optional legacy PS/2 keyboard/mouse initialization.
-The framebuffer is not a native GPU/DRM driver, and PS/2 does not cover USB input.
+- COM1 serial logging and CPU vendor identification are early diagnostics.
+- The kernel parses the Multiboot2 framebuffer tag and draws a blue background with
+  a black bottom panel when it receives a 32-bit RGB framebuffer with supported masks.
+- PCI scanning reports enumerated IDs/classes. Reported BAR values are inventory
+  only; this code does not map or access GPU MMIO registers.
+- This is not a native Intel/AMD GPU driver, DRM/KMS implementation, mouse cursor,
+  desktop, USB/xHCI driver, storage stack, or ACPI power-management implementation.
+- The temporary identity map is not a production virtual-memory manager. Physical
+  framebuffer addresses outside the mapped range need a proper MMIO mapping first.
+- `make check` does not prove a successful boot. Test with GRUB in QEMU BIOS and
+  OVMF/UEFI, then test physical machines separately. HP/Dell are vendor names, not
+  hardware interfaces; support depends on each model's firmware and devices.
 
-## Firmware and hardware
-
-A BIOS loader must perform any required transition to long mode and produce this ABI.
-A UEFI loader must finish firmware boot services before entering the kernel and map
-ELF segments/framebuffer for kernel access. The kernel does not call BIOS or UEFI
-services. The firmware mode field is descriptive; it does not itself provide firmware
-compatibility.
-
-The target is x86-64; Intel/AMD are processor targets. HP/Dell model support depends
-on actual hardware and firmware and must be tested per model. The kernel currently
-halts after early discovery; there is no desktop, cursor, USB stack, interrupt-driven
-input, reboot/shutdown UI, or guaranteed 1920x1080 mode.
-
-## Testing
-
-`make check` checks ELF64 and x86-64 metadata only. BIOS/UEFI QEMU/VirtualBox tests
-still require an external loader translating its protocol data into the Pinix ABI.
-This repository does not yet include a bootable ISO or loader.
+No universal real-PC compatibility is claimed. A real graphics driver needs device-
+specific PCI identification, BAR/resource validation and mapping, GPU initialization,
+mode setting, interrupts/DMA where applicable, and per-hardware testing. The boot
+framebuffer path is intentionally used as the safe fallback.

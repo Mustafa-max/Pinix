@@ -4,14 +4,19 @@ ENTRY(start)
 
 PHDRS
 {
-    text PT_LOAD FLAGS(5); /* read + execute */
-    data PT_LOAD FLAGS(6); /* read + write */
+    text PT_LOAD FLAGS(5);
+    data PT_LOAD FLAGS(6);
 }
 
 SECTIONS
 {
     . = 0x00100000;
     __kernel_start = .;
+
+    /* GRUB scans the first 32 KiB of the image for this header. */
+    .multiboot ALIGN(8) : {
+        KEEP(*(.multiboot))
+    } :text
 
     .text ALIGN(0x1000) : {
         KEEP(*(.text.entry))

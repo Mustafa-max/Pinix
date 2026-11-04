@@ -1,13 +1,138 @@
 #include "boot_info.h"
 #include "../drivers/serial/serial.h"
 #include "../drivers/video/framebuffer.h"
-#include "../drivers/input/ps2.h"
 #include "../drivers/check/pci.h"
+
+#define MULTIBOOT2_BOOT_MAGIC 0x36D76289u
+#define MB2_TAG_END 0u
+#define MB2_TAG_MMAP 6u
+#define MB2_TAG_FRAMEBUFFER 8u
+#define MB2_FRAMEBUFFER_TYPE_RGB 1u
+#define MB2_INFO_MAX_SIZE (16u * 1024u * 1024u)
+
+struct mb2_info_header {
+    uint32_t total_size;
+    uint32_t reserved;
+} __attribute__((packed));
+
+struct mb2_tag {
+    uint32_t type;
+    uint32_t size;
+} __attribute__((packed));
+
+struct mb2_framebuffer_tag {
+    uint32_t type;
+    uint32_t size;
+    uint64_t address;
+    uint32_t pitch;
+    uint32_t width;
+    uint32_t height;
+    uint8_t bpp;
+    uint8_t framebuffer_type;
+    uint16_t reserved;
+    uint8_t red_position;
+    uint8_t red_mask_size;
+    uint8_t green_position;
+    uint8_t green_mask_size;
+    uint8_t blue_position;
+    uint8_t blue_mask_size;
+} __attribute__((packed));
 
 static __attribute__((noreturn)) void halt_forever(void) {
     for (;;) {
         __asm__ volatile ("cli; hlt" ::: "memory");
     }
+}
+
+static int parse_multiboot2(uint32_t magic, uint32_t info_address,
+                            pinix_boot_info_t *boot_info) {
+    const struct mb2_info_header *header;
+    const uint8_t *base;
+    uint32_t offset;
+    int saw_end = 0;
+
+    if (magic != MULTIBOOT2_BOOT_MAGIC || info_address == 0 ||
+        boot_info == (pinix_boot_info_t *)0) {
+        return -1;
+    }
+
+    header = (const struct mb2_info_header *)(uintptr_t)info_address;
+    if (header->total_size < sizeof(*header) + sizeof(struct mb2_tag) ||
+        header->total_size > MB2_INFO_MAX_SIZE) {
+        return -1;
+    }
+
+    base = (const uint8_t *)header;
+    offset = sizeof(*header);
+
+    while (offset <= header->total_size - sizeof(struct mb2_tag)) {
+        const struct mb2_tag *tag =
+            (const struct mb2_tag *)(const void *)(base + offset);
+        uint32_t aligned_size;
+
+        if (tag->size < sizeof(*tag) || tag->size > header->total_size - offset) {
+            return -1;
+        }
+
+        if (tag->type == MB2_TAG_END) {
+            if (tag->size != sizeof(*tag)) return -1;
+            saw_end = 1;
+            break;
+        }
+
+        if (tag->type == MB2_TAG_MMAP) {
+            /* Validate the memory-map tag structure before any later consumer. */
+            if (tag->size < 16u) return -1;
+            const uint32_t entry_size =
+                *(const uint32_t *)(const void *)(base + offset + 8u);
+            if (entry_size < 24u || (tag->size - 16u) % entry_size != 0u) {
+                return -1;
+            }
+        } else if (tag->type == MB2_TAG_FRAMEBUFFER) {
+            if (tag->size >= sizeof(struct mb2_framebuffer_tag)) {
+                const struct mb2_framebuffer_tag *fb =
+                    (const struct mb2_framebuffer_tag *)(const void *)tag;
+                if (fb->framebuffer_type == MB2_FRAMEBUFFER_TYPE_RGB &&
+                    fb->bpp == 32u && fb->red_position == 16u &&
+                    fb->green_position == 8u && fb->blue_position == 0u &&
+                    fb->address != 0 && fb->height != 0 &&
+                    fb->pitch <= 0xFFFFFFFFu / fb->height) {
+                    boot_info->framebuffer_address = fb->address;
+                    boot_info->framebuffer_size =
+                        (uint64_t)fb->pitch * fb->height;
+                    boot_info->framebuffer_width = fb->width;
+                    boot_info->framebuffer_height = fb->height;
+                    boot_info->framebuffer_pitch_bytes = fb->pitch;
+                    boot_info->framebuffer_bpp = fb->bpp;
+                    boot_info->framebuffer_format = PINIX_FB_FORMAT_BGRX;
+                }
+            }
+        }
+
+        aligned_size = (tag->size + 7u) & ~7u;
+        if (aligned_size < tag->size || aligned_size > header->total_size - offset) {
+            return -1;
+        }
+        offset += aligned_size;
+    }
+
+    return saw_end ? 0 : -1;
+}
+
+static void draw_boot_desktop(const pinix_boot_info_t *info) {
+    if (!framebuffer_validate(info)) {
+        serial_write_string("Pinix: no supported RGB framebuffer\n");
+        return;
+    }
+
+    /* Firmware-selected mode is used; 1920x1080 is only a request to GRUB. */
+    (void)framebuffer_clear(info, 0x00A85A1Eu);
+    if (info->framebuffer_height >= 48u) {
+        (void)framebuffer_fill_rect(info, 0,
+            info->framebuffer_height - 48u,
+            info->framebuffer_width, 48u, 0x00000000u);
+    }
+    serial_write_string("Pinix: Multiboot2 framebuffer ready\n");
 }
 
 static void log_cpu_vendor(void) {
@@ -35,7 +160,7 @@ static void log_cpu_vendor(void) {
     vendor[11] = (char)(ecx >> 24);
     vendor[12] = '\0';
 
-    serial_write_string("Pinix: CPUID vendor: ");
+    serial_write_string("Pinix: CPU vendor: ");
     serial_write_string(vendor);
     serial_write_string("\n");
 }
@@ -44,7 +169,7 @@ static void log_pci_inventory(void) {
     uint32_t count = pinix_pci_scan();
     const pinix_pci_device_t *list = pinix_pci_get_devices(&count);
 
-    serial_write_string("Pinix: PCI functions discovered: ");
+    serial_write_string("Pinix: PCI devices: ");
     serial_write_hex64(count);
     serial_write_string("\n");
 
@@ -64,71 +189,25 @@ static void log_pci_inventory(void) {
         serial_write_char(':');
         serial_write_hex64(list[i].subclass);
         serial_write_char('\n');
-
-        for (uint32_t bar = 0; bar < PINIX_PCI_BAR_COUNT; ++bar) {
-            if (list[i].bar_type[bar] != PINIX_PCI_BAR_NONE) {
-                serial_write_string("  BAR");
-                serial_write_hex64(bar);
-                serial_write_string(" type=");
-                serial_write_hex64(list[i].bar_type[bar]);
-                serial_write_string(" address=");
-                serial_write_hex64(list[i].bar[bar]);
-                serial_write_char('\n');
-            }
-        }
     }
 }
 
-void kernel_main(const pinix_boot_info_t *boot_info) {
+void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_address) {
+    pinix_boot_info_t boot_info = {0};
+
     (void)serial_init();
-    serial_write_string("Pinix x86_64 kernel starting\n");
+    serial_write_string("Pinix x86_64 Multiboot2 kernel\n");
     log_cpu_vendor();
 
-    if (boot_info == (const pinix_boot_info_t *)0 ||
-        boot_info->magic != PINIX_BOOT_INFO_MAGIC ||
-        boot_info->version != PINIX_BOOT_INFO_VERSION ||
-        boot_info->struct_size < sizeof(pinix_boot_info_t)) {
-        serial_write_string("Pinix: invalid boot information; halted\n");
+    if (parse_multiboot2(multiboot_magic, multiboot_info_address,
+                         &boot_info) != 0) {
+        serial_write_string("Pinix: invalid Multiboot2 info; halted\n");
         halt_forever();
     }
 
-    if (boot_info->memory_map_entries != 0 &&
-        (boot_info->memory_map_address == 0 ||
-         boot_info->memory_map_entry_size < sizeof(pinix_memory_region_t))) {
-        serial_write_string("Pinix: invalid memory map; halted\n");
-        halt_forever();
-    }
-
-    if (boot_info->firmware_type == PINIX_BOOT_FIRMWARE_UEFI) {
-        serial_write_string("Pinix: booted by a UEFI-mode external loader\n");
-    } else if (boot_info->firmware_type == PINIX_BOOT_FIRMWARE_BIOS) {
-        serial_write_string("Pinix: booted by a BIOS-mode external loader\n");
-    } else {
-        serial_write_string("Pinix: firmware mode not specified\n");
-    }
-
-    if (framebuffer_validate(boot_info)) {
-        (void)framebuffer_clear(boot_info, 0x00000000u);
-        (void)framebuffer_fill_rect(boot_info, 20, 20, 200, 100, 0x0000FF00u);
-        serial_write_string("Pinix: boot framebuffer available\n");
-    } else {
-        serial_write_string("Pinix: no supported boot framebuffer\n");
-    }
-
+    draw_boot_desktop(&boot_info);
     log_pci_inventory();
 
-    if (ps2_kbd_init() == PS2_OK) {
-        serial_write_string("Pinix: PS/2 keyboard initialized (polling)\n");
-    } else {
-        serial_write_string("Pinix: PS/2 keyboard unavailable\n");
-    }
-
-    if (ps2_mouse_init() == PS2_OK) {
-        serial_write_string("Pinix: PS/2 mouse initialized (polling)\n");
-    } else {
-        serial_write_string("Pinix: PS/2 mouse unavailable\n");
-    }
-
-    /* PCI inventory is diagnostic only; no unvalidated BAR is dereferenced. */
+    /* No native GPU modesetting or interrupt-driven input is claimed here. */
     halt_forever();
 }
