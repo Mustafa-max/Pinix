@@ -2,6 +2,7 @@
 #include "../drivers/serial/serial.h"
 #include "../drivers/video/framebuffer.h"
 #include "../drivers/input/ps2.h"
+#include "../drivers/check/pci.h"
 
 static __attribute__((noreturn)) void halt_forever(void) {
     for (;;) {
@@ -37,6 +38,45 @@ static void log_cpu_vendor(void) {
     serial_write_string("Pinix: CPUID vendor: ");
     serial_write_string(vendor);
     serial_write_string("\n");
+}
+
+static void log_pci_inventory(void) {
+    uint32_t count = pinix_pci_scan();
+    const pinix_pci_device_t *list = pinix_pci_get_devices(&count);
+
+    serial_write_string("Pinix: PCI functions discovered: ");
+    serial_write_hex64(count);
+    serial_write_string("\n");
+
+    for (uint32_t i = 0; i < count; ++i) {
+        serial_write_string("PCI ");
+        serial_write_hex64(list[i].bus);
+        serial_write_char(':');
+        serial_write_hex64(list[i].device);
+        serial_write_char('.');
+        serial_write_hex64(list[i].function);
+        serial_write_string(" vendor=");
+        serial_write_hex64(list[i].vendor_id);
+        serial_write_string(" device=");
+        serial_write_hex64(list[i].device_id);
+        serial_write_string(" class=");
+        serial_write_hex64(list[i].class_code);
+        serial_write_char(':');
+        serial_write_hex64(list[i].subclass);
+        serial_write_char('\n');
+
+        for (uint32_t bar = 0; bar < PINIX_PCI_BAR_COUNT; ++bar) {
+            if (list[i].bar_type[bar] != PINIX_PCI_BAR_NONE) {
+                serial_write_string("  BAR");
+                serial_write_hex64(bar);
+                serial_write_string(" type=");
+                serial_write_hex64(list[i].bar_type[bar]);
+                serial_write_string(" address=");
+                serial_write_hex64(list[i].bar[bar]);
+                serial_write_char('\n');
+            }
+        }
+    }
 }
 
 void kernel_main(const pinix_boot_info_t *boot_info) {
@@ -75,6 +115,8 @@ void kernel_main(const pinix_boot_info_t *boot_info) {
         serial_write_string("Pinix: no supported boot framebuffer\n");
     }
 
+    log_pci_inventory();
+
     if (ps2_kbd_init() == PS2_OK) {
         serial_write_string("Pinix: PS/2 keyboard initialized (polling)\n");
     } else {
@@ -87,6 +129,6 @@ void kernel_main(const pinix_boot_info_t *boot_info) {
         serial_write_string("Pinix: PS/2 mouse unavailable\n");
     }
 
-    /* Interrupt handling, USB/xHCI, storage, and memory management remain TODO. */
+    /* PCI inventory is diagnostic only; no unvalidated BAR is dereferenced. */
     halt_forever();
 }

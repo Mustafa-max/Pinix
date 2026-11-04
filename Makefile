@@ -10,7 +10,8 @@ OBJECTS := \
 	$(BUILD_DIR)/kernel_main.o \
 	$(BUILD_DIR)/serial.o \
 	$(BUILD_DIR)/framebuffer.o \
-	$(BUILD_DIR)/ps2.o
+	$(BUILD_DIR)/ps2.o \
+	$(BUILD_DIR)/pci.o
 
 CFLAGS := -m64 -std=c11 -O2 -Wall -Wextra -Werror \
           -ffreestanding -fno-builtin -fno-stack-protector \
@@ -29,16 +30,19 @@ $(BUILD_DIR):
 $(BUILD_DIR)/boot.o: kernel/boot.asm | $(BUILD_DIR)
 	$(NASM) -f elf64 -Wall -Werror -o $@ $<
 
-$(BUILD_DIR)/kernel_main.o: kernel/main.c include/boot_info.h include/stdint.h drivers/video/framebuffer.h drivers/serial/serial.h drivers/input/ps2.h | $(BUILD_DIR)
+$(BUILD_DIR)/kernel_main.o: kernel/main.c include/boot_info.h include/stdint.h drivers/video/framebuffer.h drivers/serial/serial.h drivers/input/ps2.h drivers/check/pci.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/serial.o: drivers/serial/serial.c include/stdint.h | $(BUILD_DIR)
+$(BUILD_DIR)/serial.o: drivers/serial/serial.c drivers/serial/serial.h include/stdint.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/framebuffer.o: drivers/video/framebuffer.c drivers/video/framebuffer.h include/boot_info.h include/stdint.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/ps2.o: drivers/input/ps2.c drivers/input/ps2.h include/stdint.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/pci.o: drivers/check/pci.c drivers/check/pci.h include/stdint.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(KERNEL): $(OBJECTS) kernel/linker.ld
