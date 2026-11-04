@@ -1,47 +1,61 @@
 #include "kms.h"
 
-static drm_framebuffer_t active_fb;
+static int kms_ready;
 
-void kms_set_fb_address(void *addr, unsigned int pitch, unsigned int width, unsigned int height) {
-    active_fb.buffer = addr;
-    active_fb.pitch = pitch;
-    active_fb.width = width;
-    active_fb.height = height;
-    active_fb.bpp = 32;
+int kms_init(const pinix_boot_info_t *boot_info) {
+    int result = drm_init(boot_info);
+    kms_ready = result == DRM_SUCCESS;
+    return result;
 }
 
-void kms_clear_screen(color_t color) {
-    if (!active_fb.buffer || !active_fb.width || !active_fb.height) {
-        return;
-    }
-
-    volatile unsigned int *fb = (volatile unsigned int *)active_fb.buffer;
-    unsigned int pitch_px = active_fb.pitch / 4;
-
-    for (unsigned int y = 0; y < active_fb.height; ++y) {
-        for (unsigned int x = 0; x < active_fb.width; ++x) {
-            fb[(y * pitch_px) + x] = (unsigned int)color;
-        }
-    }
+int kms_get_mode(drm_display_mode_t *mode) {
+    if (!kms_ready) return DRM_ERROR_NO_DEVICE;
+    return drm_get_mode(mode);
 }
 
-void kms_draw_rect(unsigned int x, unsigned int y, unsigned int w, unsigned int h, color_t color) {
-    if (!active_fb.buffer || !active_fb.width || !active_fb.height) {
-        return;
+int kms_set_mode(const drm_display_mode_t *mode) {
+    drm_display_mode_t current;
+    if (!kms_ready) return DRM_ERROR_NO_DEVICE;
+    if (mode == (const drm_display_mode_t *)0) return DRM_ERROR_INVALID_PARAM;
+    if (drm_get_mode(&current) != DRM_SUCCESS) return DRM_ERROR_NO_DEVICE;
+
+    /* The boot framebuffer is already in a firmware/loader-selected mode.
+     * Refuse to claim a mode switch that this software-only path cannot do.
+     */
+    if (mode->width != current.width || mode->height != current.height ||
+        mode->pitch_bytes != current.pitch_bytes ||
+        mode->bits_per_pixel != current.bits_per_pixel) {
+        return DRM_ERROR_UNSUPPORTED;
     }
+    return DRM_SUCCESS;
+}
 
-    unsigned int max_x = x + w;
-    unsigned int max_y = y + h;
+int kms_present(void) {
+    if (!kms_ready) return DRM_ERROR_NO_DEVICE;
+    __asm__ volatile ("sfence" ::: "memory");
+    return DRM_SUCCESS;
+}
 
-    if (max_x > active_fb.width) max_x = active_fb.width;
-    if (max_y > active_fb.height) max_y = active_fb.height;
+int kms_put_pixel(uint32_t x, uint32_t y, color_t color) {
+    if (!kms_ready) return DRM_ERROR_NO_DEVICE;
+    return drm_put_pixel(x, y, color);
+}
 
-    volatile unsigned int *fb = (volatile unsigned int *)active_fb.buffer;
-    unsigned int pitch_px = active_fb.pitch / 4;
+int kms_fill_rect(uint32_t x, uint32_t y, uint32_t width,
+                  uint32_t height, color_t color) {
+    if (!kms_ready) return DRM_ERROR_NO_DEVICE;
+    return drm_fill_rect(x, y, width, height, color);
+}
 
-    for (unsigned int py = y; py < max_y; ++py) {
-        for (unsigned int px = x; px < max_x; ++px) {
-            fb[(py * pitch_px) + px] = (unsigned int)color;
-        }
-    }
+int kms_clear(color_t color) {
+    if (!kms_ready) return DRM_ERROR_NO_DEVICE;
+    return drm_clear(color);
+}
+
+int kms_draw_desktop(void) {
+    int result;
+    if (!kms_ready) return DRM_ERROR_NO_DEVICE;
+    result = drm_draw_desktop();
+    if (result != DRM_SUCCESS) return result;
+    return kms_present();
 }

@@ -1,64 +1,57 @@
-/*
- * Pinix-Kernel DRM Subsystem - drm.h
- * Direct Rendering Manager Header Compatible with Hardware and GOP Subsystems
+#ifndef PINIX_DRM_H
+#define PINIX_DRM_H
+
+#include "pixel.h"
+#include "../../../include/boot_info.h"
+
+#define DRM_SUCCESS             0
+#define DRM_ERROR_NO_DEVICE    -1
+#define DRM_ERROR_INVALID_PARAM -2
+#define DRM_ERROR_UNSUPPORTED  -3
+
+/* This project currently implements a software renderer to a boot framebuffer.
+ * These types are not a claim of Linux DRM/GEM or native GPU driver support.
  */
-
-#ifndef DRM_H
-#define DRM_H
-
-#define DRM_MAX_DEVICES 8
-#define KMS_MAX_MODES 16
-#define KMS_MAX_FRAMEBUFFERS 4
-
-#define DRM_SUCCESS 0
-#define DRM_ERROR_NO_DEVICE -1
-#define DRM_ERROR_NOMEM -2
-#define DRM_ERROR_INVALID_PARAM -3
-
 typedef struct {
-    unsigned int id;
-    unsigned long mmio_base;
-    unsigned long fb_base;
-    unsigned int width;
-    unsigned int height;
-    unsigned int pitch;
-    unsigned int bpp;
-    unsigned int initialized;
-} drm_device_t;
-
-typedef struct {
-    unsigned int clock;
-    unsigned int hdisplay;
-    unsigned int hsync_start;
-    unsigned int hsync_end;
-    unsigned int htotal;
-    unsigned int vdisplay;
-    unsigned int vsync_start;
-    unsigned int vsync_end;
-    unsigned int vtotal;
+    uint32_t width;
+    uint32_t height;
+    uint32_t refresh_millihz;
+    uint32_t pitch_bytes;
+    uint32_t bits_per_pixel;
 } drm_display_mode_t;
 
 typedef struct {
-    unsigned int id;
-    unsigned int width;
-    unsigned int height;
-    unsigned int pitch;
-    unsigned int bpp;
-    void *buffer;
+    volatile pixel_bgrx32_t *pixels;
+    uint64_t physical_or_identity_address;
+    uint64_t size_bytes;
+    uint32_t width;
+    uint32_t height;
+    uint32_t pitch_bytes;
+    uint32_t bits_per_pixel;
+    uint32_t format;
+    uint32_t initialized;
 } drm_framebuffer_t;
 
-int drm_init(void);
-int drm_register_device(drm_device_t *dev);
-int drm_unregister_device(unsigned int id);
-drm_device_t* drm_get_primary_device(void);
-unsigned int drm_read_reg(drm_device_t *dev, unsigned long offset);
-void drm_write_reg(drm_device_t *dev, unsigned long offset, unsigned int val);
-int drm_create_client(unsigned int pid);
-int drm_authenticate_client(int client_id, unsigned int magic);
-int drm_gem_create_object(unsigned long size, unsigned int *handle);
-int drm_gem_free_object(unsigned int handle);
-int drm_prime_handle_to_fd(unsigned int handle, int *fd);
-int drm_prime_fd_to_handle(int fd, unsigned int *handle);
-int drm_ioctl(unsigned int request, unsigned long arg);
+typedef struct {
+    uint32_t id;
+    uint16_t vendor_id;
+    uint16_t device_id;
+    uint8_t class_code;
+    uint8_t subclass;
+    uint8_t bus;
+    uint8_t device;
+    uint8_t function;
+    uint8_t reserved[3];
+} drm_device_t;
+
+int drm_init(const pinix_boot_info_t *boot_info);
+int drm_is_initialized(void);
+const drm_framebuffer_t *drm_get_framebuffer(void);
+int drm_get_mode(drm_display_mode_t *mode);
+int drm_put_pixel(uint32_t x, uint32_t y, color_t color);
+int drm_fill_rect(uint32_t x, uint32_t y, uint32_t width,
+                  uint32_t height, color_t color);
+int drm_clear(color_t color);
+int drm_draw_desktop(void);
 
 #endif

@@ -1,34 +1,31 @@
 BITS 32
 
-%define MULTIBOOT2_HEADER_MAGIC 0xE85250D6
-%define MULTIBOOT2_BOOT_MAGIC   0x36D76289
+%define MULTIBOOT2_BOOT_MAGIC 0x36D76289
 
 section .multiboot
 align 8
 mb2_header_start:
-    dd MULTIBOOT2_HEADER_MAGIC
-    dd 0                          ; architecture: i386 protected mode
+    dd 0xE85250D6
+    dd 0
     dd mb2_header_end - mb2_header_start
-    dd -(MULTIBOOT2_HEADER_MAGIC + (mb2_header_end - mb2_header_start))
+    dd -(0xE85250D6 + (mb2_header_end - mb2_header_start))
 
-    ; Optional information requests: memory map (6), framebuffer (8).
-    dw 1                          ; information-request header tag
-    dw 0                          ; optional
+    dw 1
+    dw 0
     dd 16
     dd 6
     dd 8
     align 8
 
-    ; Ask GRUB for 1920x1080x32 when the firmware/adapter supports it.
-    dw 5                          ; framebuffer header tag
-    dw 0                          ; optional; loader may choose a supported mode
+    dw 5
+    dw 0
     dd 20
     dd 1920
     dd 1080
     dd 32
     align 8
 
-    dw 0                          ; end tag
+    dw 0
     dw 0
     dd 8
 mb2_header_end:
@@ -38,7 +35,6 @@ section .text.entry
  extern kernel_main
 
 start:
-    ; Multiboot2 i386 entry: EAX=boot magic, EBX=physical info pointer.
     cli
     cld
     cmp eax, MULTIBOOT2_BOOT_MAGIC
@@ -46,8 +42,7 @@ start:
     mov [mb2_saved_magic], eax
     mov [mb2_saved_info], ebx
 
-    ; Build identity mappings for the first 4 GiB with 2 MiB pages.
-    ; This is an early-boot map, not the kernel's final virtual memory layout.
+    ; Temporary identity map for the first 4 GiB using 2 MiB pages.
     mov eax, pdpt
     or eax, 0x3
     mov [pml4], eax
@@ -70,7 +65,7 @@ start:
     mov ecx, 2048
 .page_loop:
     mov eax, edx
-    or eax, 0x83                 ; present, writable, 2 MiB page
+    or eax, 0x83
     mov [edi], eax
     mov dword [edi + 4], 0
     add edx, 0x200000
@@ -78,19 +73,19 @@ start:
     loop .page_loop
 
     mov eax, cr4
-    or eax, 1 << 5               ; PAE
+    or eax, 1 << 5
     mov cr4, eax
     mov eax, pml4
     mov cr3, eax
 
-    mov ecx, 0xC0000080          ; EFER
+    mov ecx, 0xC0000080
     rdmsr
-    or eax, 1 << 8               ; LME
+    or eax, 1 << 8
     wrmsr
 
     lgdt [gdt64_pointer]
     mov eax, cr0
-    or eax, 1 << 31              ; paging (protected mode already active)
+    or eax, 1 << 31
     mov cr0, eax
     jmp 0x08:long_mode_entry
 
@@ -112,7 +107,6 @@ long_mode_entry:
     lea rsp, [rel stack_top]
     and rsp, -16
     xor rbp, rbp
-
     mov edi, dword [rel mb2_saved_magic]
     mov esi, dword [rel mb2_saved_info]
     call kernel_main
@@ -125,9 +119,9 @@ long_mode_entry:
 section .rodata
 align 8
 gdt64:
-    dq 0x0000000000000000
-    dq 0x00AF9A000000FFFF       ; 64-bit kernel code
-    dq 0x00CF92000000FFFF       ; kernel data
+    dq 0
+    dq 0x00AF9A000000FFFF
+    dq 0x00CF92000000FFFF
 gdt64_end:
 gdt64_pointer:
     dw gdt64_end - gdt64 - 1
@@ -137,14 +131,11 @@ section .bss
 align 4096
 pml4: resb 4096
 pdpt: resb 4096
-pd0:  resb 4 * 4096
-
+pd0: resb 4 * 4096
 align 4
 mb2_saved_magic: resd 1
-mb2_saved_info:  resd 1
-
+mb2_saved_info: resd 1
 align 16
 stack_bottom: resb 16384
 stack_top:
-
 section .note.GNU-stack noalloc noexec nowrite progbits
