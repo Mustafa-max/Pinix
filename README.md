@@ -14,7 +14,7 @@
 
 ## 💡 Proje Hakkında
 
-**Pinix Kernel**, tamamen eğlence, merak ve düşük seviyeli sistem programlamasını keşfetmek amacıyla **2 hafta gibi kısa bir sürede** hayata geçirilmiş bağımsız bir çekirdek projesidir. 
+**Pinix Kernel**, tamamen eğlence, merak ve düşük seviyeli sistem programlamasını keşfetmek amacıyla **2 hafta gibi kısa bir sürede** hayata geçirilmiş bağımsız bir çekirdek projesidir. Ve hala geliştirilmeye devam ediyor.
 
 Kod tabanında hiçbir hazır veya telifli Linux kodu kullanılmamıştır; bunun yerine Linux'un zarif mimari yapısından ve felsefesinden ilham alınarak sıfırdan tasarlanmıştır.
 
@@ -27,5 +27,5 @@ Kod tabanında hiçbir hazır veya telifli Linux kodu kullanılmamıştır; bunu
 ## 📌 Uyarı ve Amaç
 
 >Bu proje bilgisayarınızda çalıştırmak isterseniz çalışmayabilir. Sebebi çünkü içinde bootloader kodları olmayan saf kernel kod vardır. Ama distro yaparsanız belki çalışabilir.
-> Bu proje tamamen **eğlence ve hobisel** amaçlarla geliştirilmektedir. Üretim ortamında kullanım için tasarlanmamıştır, düşük seviyeli işletim sistemi geliştirme deneyidir.eğer projeyi indirirseniz kernel/main.c kodunu istediğiniz şekilde değiştirin. Değiştirmeyi unutmayın! :D ama eğer çalıştırırsanız ekranda muhtemelen garip şeyler olur veya gözükmez. Bu yüzden C/C++ ve ASM dili bilmeniz gerekir ve bu dilleri kullanarak ayarlama yapmanız gerekir. Kendi PC özelliklerine göre ayarlayın ama distro yaparsanız açık veya kapalı kaynak olsun farketmez. Biraz sorunlar var ama onun dışında iyi yani
+> Bu proje tamamen **eğlence ve hobisel** amaçlarla geliştirilmektedir. Üretim ortamında kullanım için tasarlanmamıştır, düşük seviyeli işletim sistemi geliştirme deneyidir.eğer projeyi indirirseniz kernel/main.c kodunu istediğiniz şekilde değiştirin. Değiştirmeyi unutmayın! :D ama eğer çalıştırırsanız ekranda muhtemelen garip şeyler olur veya gözükmez. Bu yüzden C/C++ ve ASM dili bilmeniz gerekir ve bu dilleri kullanarak ayarlama yapmanız gerekir. Kendi PC özelliklerine göre ayarlayın ama distro yaparsanız açık veya kapalı kaynak olsun farketmez. Biraz sorunlar var ama onun dışında iyi yani. Derleme çıtkısını gerekli araçları kurup **make** kullanarak derler derlemez build/vmpinix-7.0.0generic konumda çıtkı oluşur. Oradaki derlenmiş saf 64bit ELF çekirdeği ister distro yapın ister başka şey.
 
