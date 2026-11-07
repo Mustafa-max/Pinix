@@ -4,18 +4,20 @@ ENTRY(start)
 
 PHDRS
 {
-    text PT_LOAD FLAGS(5);
-    data PT_LOAD FLAGS(6);
+    text PT_LOAD FLAGS(5); /* read + execute */
+    data PT_LOAD FLAGS(6); /* read + write */
 }
 
 SECTIONS
 {
+    /* Keep all 32-bit trampoline absolute relocations safely below 2 GiB. */
     . = 0x00100000;
     __kernel_start = .;
 
-    /* GRUB scans the first 32 KiB of the image for this header. */
     .multiboot ALIGN(8) : {
+        __multiboot_start = .;
         KEEP(*(.multiboot))
+        __multiboot_end = .;
     } :text
 
     .text ALIGN(0x1000) : {
@@ -46,6 +48,10 @@ SECTIONS
         *(.eh_frame .eh_frame.*)
     }
 
+    ASSERT(__multiboot_start - __kernel_start < 0x8000,
+           "Multiboot2 header is not in the first 32 KiB")
+    ASSERT(__kernel_end < 0x80000000,
+           "kernel exceeds low 2 GiB trampoline address range")
     ASSERT(start >= __kernel_start && start < __kernel_end,
            "kernel entry is outside the loaded image")
 }
