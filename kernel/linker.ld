@@ -4,13 +4,12 @@ ENTRY(start)
 
 PHDRS
 {
-    text PT_LOAD FLAGS(5); /* read + execute */
-    data PT_LOAD FLAGS(6); /* read + write */
+    text PT_LOAD FLAGS(5);
+    data PT_LOAD FLAGS(6);
 }
 
 SECTIONS
 {
-    /* Keep all 32-bit trampoline absolute relocations safely below 2 GiB. */
     . = 0x00100000;
     __kernel_start = .;
 
@@ -49,9 +48,9 @@ SECTIONS
     }
 
     ASSERT(__multiboot_start - __kernel_start < 0x8000,
-           "Multiboot2 header is not in the first 32 KiB")
+           "Multiboot2 header is outside the first 32 KiB")
     ASSERT(__kernel_end < 0x80000000,
-           "kernel exceeds low 2 GiB trampoline address range")
+           "Kernel exceeds the low 2 GiB bootstrap address range")
     ASSERT(start >= __kernel_start && start < __kernel_end,
-           "kernel entry is outside the loaded image")
+           "Kernel entry is outside the loaded image")
 }
