@@ -5,51 +5,68 @@ READELF ?= readelf
 GRUB_FILE ?= grub-file
 
 BUILD_DIR := build
+OBJ_DIR := $(BUILD_DIR)/obj
 KERNEL := $(BUILD_DIR)/pinix.elf
-OBJECTS := $(BUILD_DIR)/boot.o $(BUILD_DIR)/kernel_main.o \
-           $(BUILD_DIR)/serial.o $(BUILD_DIR)/framebuffer.o \
-           $(BUILD_DIR)/pci.o $(BUILD_DIR)/drm.o $(BUILD_DIR)/kms.o
-CFLAGS := -m64 -std=c11 -O2 -Wall -Wextra -Werror \
+BOOT_OBJ := $(OBJ_DIR)/kernel/boot.o
+
+# Recursively find every C translation unit in every repository directory.
+# Only generated output and Git metadata are excluded.
+C_SOURCES := $(shell find . -type f -name '*.c' \
+             -not -path './build/*' -not -path './.git/*' | sort)
+C_OBJECTS := $(patsubst ./%.c,$(OBJ_DIR)/%.o,$(C_SOURCES))
+
+# Link only the early-boot kernel components. Every other discovered C file is
+# still compiled into its own object by the default target.
+KERNEL_C_SOURCES := \
+	kernel/main.c \
+	drivers/serial/serial.c \
+	drivers/video/framebuffer.c \
+	drivers/check/pci.c \
+	drivers/gpu/drm/drm.c \
+	drivers/gpu/drm/kms.c
+KERNEL_OBJECTS := $(addprefix $(OBJ_DIR)/,$(KERNEL_C_SOURCES:.c=.o))
+
+CFLAGS := -m64 -std=gnu11 -O2 -Wall -Wextra \
           -ffreestanding -fno-builtin -fno-stack-protector \
           -fno-pic -fno-pie -fno-asynchronous-unwind-tables \
           -fno-unwind-tables -mno-red-zone -mno-mmx -mno-sse \
-          -mcmodel=small -nostdlib -nostdinc -Iinclude
-LDFLAGS := -m elf_x86_64 -nostdlib -T kernel/linker.ld -z max-page-size=0x1000
+          -mcmodel=small -nostdlib -nostdinc -Iinclude -I.
+LDFLAGS := -m elf_x86_64 -nostdlib -T kernel/linker.ld \
+           -z max-page-size=0x1000
 
-.PHONY: all clean check check-multiboot2
-all: $(KERNEL)
+.PHONY: all all-c clean check check-multiboot2
+all: all-c $(KERNEL)
+
+# Compiles all discovered C files, but does not indiscriminately link them all
+# into one kernel (many directories contain separate or alternative components).
+all-c: $(C_OBJECTS)
 
 $(BUILD_DIR):
 	mkdir -p $@
 
-$(BUILD_DIR)/boot.o: kernel/boot.asm | $(BUILD_DIR)
-	$(NASM) -f elf64 -Wall -Werror -o $@ $<
-
-$(BUILD_DIR)/kernel_main.o: kernel/main.c include/boot_info.h drivers/serial/serial.h drivers/video/framebuffer.h drivers/check/pci.h drivers/gpu/drm/kms.h | $(BUILD_DIR)
+# Preserve each source path under build/obj, e.g. drivers/gpu/foo.c ->
+# build/obj/drivers/gpu/foo.o. This prevents basename collisions.
+$(OBJ_DIR)/%.o: %.c
+	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/serial.o: drivers/serial/serial.c drivers/serial/serial.h include/stdint.h | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+$(BOOT_OBJ): kernel/boot.asm | $(BUILD_DIR)
+	mkdir -p $(dir $@)
+	$(NASM) -f elf64 -Wall -Werror \
+		-w-reloc-abs-dword -w-reloc-abs-qword -w-reloc-rel-dword \
+		-o $@ $<
 
-$(BUILD_DIR)/framebuffer.o: drivers/video/framebuffer.c drivers/video/framebuffer.h include/boot_info.h include/stdint.h | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
+$(KERNEL): $(BOOT_OBJ) $(KERNEL_OBJECTS) kernel/linker.ld
+	$(LD) $(LDFLAGS) -o $@ $(BOOT_OBJ) $(KERNEL_OBJECTS)
 
-$(BUILD_DIR)/pci.o: drivers/check/pci.c drivers/check/pci.h include/stdint.h | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/drm.o: drivers/gpu/drm/drm.c drivers/gpu/drm/drm.h drivers/gpu/drm/pixel.h drivers/video/framebuffer.h include/boot_info.h | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/kms.o: drivers/gpu/drm/kms.c drivers/gpu/drm/kms.h drivers/gpu/drm/drm.h | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(KERNEL): $(OBJECTS) kernel/linker.ld
-	$(LD) $(LDFLAGS) -o $@ $(OBJECTS)
-
-check: $(KERNEL)
+check: all
 	$(READELF) -h $(KERNEL) | grep -q 'Class:.*ELF64'
 	$(READELF) -h $(KERNEL) | grep -q 'Machine:.*Advanced Micro Devices X86-64'
-	@if command -v $(GRUB_FILE) >/dev/null 2>&1; then $(GRUB_FILE) --is-x86-multiboot2 $(KERNEL); else echo 'grub-file unavailable; skipped'; fi
+	@if command -v $(GRUB_FILE) >/dev/null 2>&1; then \
+		$(GRUB_FILE) --is-x86-multiboot2 $(KERNEL); \
+	else \
+		echo 'grub-file unavailable; skipped Multiboot2 header validation'; \
+	fi
 
 check-multiboot2: $(KERNEL)
 	$(GRUB_FILE) --is-x86-multiboot2 $(KERNEL)
