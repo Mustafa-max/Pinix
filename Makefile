@@ -17,13 +17,8 @@ C_OBJECTS := $(patsubst ./%.c,$(OBJ_DIR)/%.o,$(C_SOURCES))
 
 # Link only the early-boot kernel components. Every other discovered C file is
 # still compiled into its own object by the default target.
-KERNEL_C_SOURCES := \
-	kernel/main.c \
-	drivers/serial/serial.c \
-	drivers/video/framebuffer.c \
-	drivers/check/pci.c \
-	drivers/gpu/drm/drm.c \
-	drivers/gpu/drm/kms.c
+KERNEL_C_SOURCES := $(shell find . -type f -name '*.c' \
+                    -not -path './build/*' -not -path './.git/*' | sort)
 KERNEL_OBJECTS := $(addprefix $(OBJ_DIR)/,$(KERNEL_C_SOURCES:.c=.o))
 
 CFLAGS := -m64 -std=gnu11 -O2 -Wall -Wextra \
